@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auth + RBAC Demo</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      max-width: 860px; margin: 0 auto; padding: 24px; line-height: 1.5;
+    }
+    h1 { margin-bottom: 4px; }
+    .sub { color: #666; margin-top: 0; }
+    section { border: 1px solid #ccc; border-radius: 10px; padding: 16px; margin: 16px 0; }
+    h2 { margin-top: 0; font-size: 1.05rem; }
+    label { display: block; font-size: .85rem; margin-top: 8px; }
+    input { width: 100%; padding: 8px; margin-top: 2px; border: 1px solid #aaa; border-radius: 6px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    button {
+      padding: 8px 14px; border: 0; border-radius: 6px; cursor: pointer;
+      background: #2563eb; color: #fff; font-weight: 600;
+    }
+    button.secondary { background: #6b7280; }
+    button:hover { opacity: .9; }
+    pre {
+      background: #111; color: #d1f7d1; padding: 12px; border-radius: 8px;
+      overflow: auto; max-height: 320px; white-space: pre-wrap; word-break: break-word;
+    }
+    .status { font-size: .85rem; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+    .in { background: #dcfce7; color: #166534; }
+    .out { background: #fee2e2; color: #991b1b; }
+    .pill { font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>Auth + RBAC Demo</h1>
+  <p class="sub">A minimal client to test registration, login, logout, and role-based access.</p>
+
+  <section>
+    <h2>Session
+      <span id="sessionStatus" class="status out">Logged out</span>
+    </h2>
+    <div>Current user: <span id="whoami" class="pill">(none)</span></div>
+    <div class="row">
+      <button id="btnMe" class="secondary">GET /api/me</button>
+      <button id="btnLogout" class="secondary">Logout</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Register / Login</h2>
+    <label>Username
+      <input id="username" autocomplete="username" placeholder="3-32 chars" />
+    </label>
+    <label>Password
+      <input id="password" type="password" autocomplete="current-password" placeholder="min 8 chars" />
+    </label>
+    <div class="row">
+      <button id="btnRegister">Register</button>
+      <button id="btnLogin">Login</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Test endpoints</h2>
+    <div class="row">
+      <button id="btnPublic" class="secondary">Public (anyone)</button>
+      <button id="btnDashboard">User dashboard (auth)</button>
+      <button id="btnAdminUsers">Admin: list users</button>
+      <button id="btnAdminMetrics">Admin: metrics</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Last response <span id="lastStatus" class="pill"></span></h2>
+    <pre id="output">Responses appear here.</pre>
+  </section>
+
+  <script>
+    const TOKEN_KEY = 'demo_token';
+    const USER_KEY = 'demo_user';
+    const out = document.getElementById('output');
+
+    function getToken() { return localStorage.getItem(TOKEN_KEY); }
+
+    function setSession(token, user) {
+      if (token) localStorage.setItem(TOKEN_KEY, token);
+      if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+      renderSession();
+    }
+
+    function clearSession() {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      renderSession();
+    }
+
+    function renderSession() {
+      const user = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+      const statusEl = document.getElementById('sessionStatus');
+      const who = document.getElementById('whoami');
+      if (getToken() && user) {
+        statusEl.textContent = 'Logged in';
+        statusEl.className = 'status in';
+        who.textContent = `${user.username} (${user.role})`;
+      } else {
+        statusEl.textContent = 'Logged out';
+        statusEl.className = 'status out';
+        who.textContent = '(none)';
+      }
+    }
+
+    async function call(method, url, { auth = false, body = null } = {}) {
+      const headers = {};
+      if (body) headers['Content-Type'] = 'application/json';
+      if (auth && getToken()) headers['Authorization'] = 'Bearer ' + getToken();
+
+      let res, data;
+      try {
+        res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+        data = await res.json().catch(() => ({}));
+      } catch (err) {
+        document.getElementById('lastStatus').textContent = '(network error)';
+        out.textContent = String(err);
+        return { res: null, data: null };
+      }
+
+      document.getElementById('lastStatus').textContent =
+        `${res.status} ${res.statusText}`;
+      out.textContent = `${method} ${url}\nHTTP ${res.status}\n\n` +
+        JSON.stringify(data, null, 2);
+      return { res, data };
+    }
+
+    function creds() {
+      return {
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+      };
+    }
+
+    document.getElementById('btnRegister').onclick = async () => {
+      const { res, data } = await call('POST', '/api/register', { body: creds() });
+      if (res && res.ok) setSession(data.token, data.user);
+    };
+
+    document.getElementById('btnLogin').onclick = async () => {
+      const { res, data } = await call('POST', '/api/login', { body: creds() });
+      if (res && res.ok) setSession(data.token, data.user);
+    };
+
+    document.getElementById('btnLogout').onclick = async () => {
+      await call('POST', '/api/logout', { auth: true });
+      clearSession();
+    };
+
+    document.getElementById('btnMe').onclick = () =>
+      call('GET', '/api/me', { auth: true });
+
+    document.getElementById('btnPublic').onclick = () =>
+      call('GET', '/api/public');
+
+    document.getElementById('btnDashboard').onclick = () =>
+      call('GET', '/api/dashboard', { auth: true });
+
+    document.getElementById('btnAdminUsers').onclick = () =>
+      call('GET', '/api/admin/users', { auth: true });
+
+    document.getElementById('btnAdminMetrics').onclick = () =>
+      call('GET', '/api/admin/metrics', { auth: true });
+
+    renderSession();
+  </script>
+</body>
+</html>

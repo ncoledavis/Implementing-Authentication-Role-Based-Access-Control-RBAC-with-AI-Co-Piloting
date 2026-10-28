@@ -1,0 +1,19 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password_hash": "$2a$12$zw1Ktx7pwTK2QM7CIfal8.Pp97UXkqM8QfloIYezj7BqDqQ6/3Z.O",
+      "role": "Admin",
+      "created_at": "2026-10-28T03:21:49.743Z"
+    },
+    {
+      "id": 2,
+      "username": "alice",
+      "password_hash": "$2a$12$Zimn59x9YltRWLHS0T2SbeBXizHQ3VZ/24HBytynfYC2.NsEotHJG",
+      "role": "User",
+      "created_at": "2026-10-28T03:22:09.802Z"
+    }
+  ],
+  "nextId": 3
+}
